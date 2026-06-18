@@ -21,6 +21,19 @@ const client = new MongoClient(uri, {
 });
 
 
+// const verifyToken = (req, res, next) => {
+//     const authHeader = req?.headers?.authorization;
+//     if (!authHeader) {
+//         return res.status(401).json({ message: "Unauthorized" });
+//     }
+//     const token = authHeader.split(" ")[1];
+//     if (!token) {
+//         return res.status(401).json({ message: "Unauthorized" });
+//     }
+
+
+//     next();
+// }
 
 
 async function run() {
@@ -56,6 +69,46 @@ async function run() {
             const result = await tutorCollection.findOne({ _id: new ObjectId(id) });
             res.json(result);
         })
+
+        app.patch('/tutor/:id', async (req, res) => {
+            const { id } = req.params;
+            const updatedData = req.body;
+            console.log(updatedData);
+            const result = await tutorCollection.updateOne(
+                { _id: new ObjectId(id) },
+                { $set: updatedData }
+            )
+            res.json(result);
+        })
+        app.delete('/tutor/:id', async (req, res) => {
+            const { id } = req.params;
+            const result = await tutorCollection.deleteOne({ _id: new ObjectId(id) })
+            res.json(result);
+        })
+
+
+//         // bookCollection
+//         app.get('/booking/:userId', async (req, res) => {
+//             const { userId } = req.params;
+//             const result = await bookCollection.find({ userId: userId }).toArray();
+//             res.json(result);
+//         })
+//         app.post("/booking", async (req, res) => {
+//             const bookingData = req.body;
+//             const result = await bookCollection.insertOne(bookingData);
+//             res.json(result);
+//         })
+
+
+//         app.delete("/booking/:bookingId", async (req, res) => {
+//             const { bookingId } = req.params;
+//             const result = await bookCollection.deleteOne({
+//                 _id: new ObjectId(bookingId),
+//             });
+
+
+//             res.json(result);
+//         });
 
 
 
