@@ -21,19 +21,7 @@ const client = new MongoClient(uri, {
 });
 
 
-// const verifyToken = (req, res, next) => {
-//     const authHeader = req?.headers?.authorization;
-//     if (!authHeader) {
-//         return res.status(401).json({ message: "Unauthorized" });
-//     }
-//     const token = authHeader.split(" ")[1];
-//     if (!token) {
-//         return res.status(401).json({ message: "Unauthorized" });
-//     }
 
-
-//     next();
-// }
 
 
 async function run() {
@@ -42,7 +30,7 @@ async function run() {
 
         const db = client.db("mediqueue");
         const tutorCollection = db.collection("tutor");
-//         const bookCollection = db.collection("bookings");
+        const bookingCollection = db.collection("booking");
 
         app.get("/tutor", async (req, res) => {
             const result = await tutorCollection.find().toArray();
@@ -58,17 +46,17 @@ async function run() {
             res.json(result);
         })
 
-        app.get('/tutor/:id', 
-        //     verifyToken, (req, res, next) => {
-        //     const header = req.headers.authorization;
-        //     console.log(header);
-        //     next();
-        // },
-         async (req, res) => {
-            const { id } = req.params;
-            const result = await tutorCollection.findOne({ _id: new ObjectId(id) });
-            res.json(result);
-        })
+        app.get('/tutor/:id',
+            //     verifyToken, (req, res, next) => {
+            //     const header = req.headers.authorization;
+            //     console.log(header);
+            //     next();
+            // },
+            async (req, res) => {
+                const { id } = req.params;
+                const result = await tutorCollection.findOne({ _id: new ObjectId(id) });
+                res.json(result);
+            })
 
         app.patch('/tutor/:id', async (req, res) => {
             const { id } = req.params;
@@ -87,29 +75,60 @@ async function run() {
         })
 
 
-//         // bookCollection
-//         app.get('/booking/:userId', async (req, res) => {
-//             const { userId } = req.params;
-//             const result = await bookCollection.find({ userId: userId }).toArray();
-//             res.json(result);
-//         })
-//         app.post("/booking", async (req, res) => {
-//             const bookingData = req.body;
-//             const result = await bookCollection.insertOne(bookingData);
-//             res.json(result);
-//         })
+        // bookCollection
+        app.get('/booking/:userId', async (req, res) => {
+            const { userId } = req.params;
+            const result = await bookingCollection.find({ userId: userId }).toArray();
+            res.json(result);
+        });
+        app.post("/booking", async (req, res) => {
+            const bookingData = req.body;
+            const result = await bookingCollection.insertOne(bookingData);
+            res.json(result);
+        })
 
 
-//         app.delete("/booking/:bookingId", async (req, res) => {
-//             const { bookingId } = req.params;
-//             const result = await bookCollection.deleteOne({
-//                 _id: new ObjectId(bookingId),
-//             });
+        app.delete("/booking/:bookingId", async (req, res) => {
+            const { bookingId } = req.params;
+
+            // 1. Finding the booking record first to look up the tutorId
+            const booking = await bookingCollection.findOne({ _id: new ObjectId(bookingId) });
+
+            if (!booking) {
+                return res.status(404).json({ message: "Booking record not found" });
+            }
+
+            // 2. Deleting the appointment record
+            const result = await bookingCollection.deleteOne({ _id: new ObjectId(bookingId) });
+
+            // 3. Updating the tutor's profile to add 1 slot back
+            if (booking.tutorId) {
+                await tutorCollection.updateOne(
+                    { _id: new ObjectId(booking.tutorId) },
+                    { $inc: { totalSlots: 1 } } // Automatically increases the slots count by 1
+                );
+            }
+
+            res.json(result);
+        });
 
 
-//             res.json(result);
-//         });
+        app.get("/my-tutors/:userId", async (req, res) => {
+            try {
+                const { userId } = req.params;
 
+                if (!userId) {
+                    return res.status(400).json({ message: "User ID parameter is required" });
+                }
+
+                // Query documents matching the creator's userId string
+                const result = await tutorCollection.find({ userId: userId }).toArray();
+                res.json(result);
+            } catch (error) {
+                console.error("Error retrieving user tutors:", error);
+                res.status(500).json({ message: "Internal Server Error" });
+            }
+        });
 
 
 
