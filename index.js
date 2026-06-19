@@ -21,8 +21,19 @@ const client = new MongoClient(uri, {
 });
 
 
+// const verifyToken = (req, res, next) => {
+//     const authHeader = req?.headers?.authorization;
+//     if (!authHeader) {
+//         return res.status(401).json({ message: "Unauthorized" });
+//     }
+//     const token = authHeader.split(" ")[1];
+//     if (!token) {
+//         return res.status(401).json({ message: "Unauthorized" });
+//     }
 
 
+//     next();
+// }
 
 async function run() {
     try {
@@ -130,7 +141,20 @@ async function run() {
             }
         });
 
+        // Featured Data
+        app.get("/featured-tutors", async (req, res) => {
+            try {
+                const result = await tutorCollection
+                    .find()
+                    .limit(6) 
+                    .toArray();
 
+                res.json(result);
+            } catch (error) {
+                console.error("Error fetching homepage tutors:", error);
+                res.status(500).json({ message: "Failed to load featured tutors" });
+            }
+        });
 
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
