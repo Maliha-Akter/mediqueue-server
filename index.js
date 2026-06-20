@@ -2,6 +2,7 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const { createRemoteJWKSet, jwtVerify } = require('jose-cjs');
 
 dotenv.config();
 const uri = process.env.MONGODB_URI;
@@ -20,20 +21,27 @@ const client = new MongoClient(uri, {
     }
 });
 
+// const JWKS = createRemoteJWKSet(new URL(`${process.env.CLIENT_URL}/api/auth/jwks`));
+const JWKS = createRemoteJWKSet(new URL("http://localhost:3000/api/auth/jwks"))
+const verifyToken = async (req, res, next) => {
+    const authHeader = req?.headers?.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ message: "Unauthorized: Missing Token" });
+    }
 
-// const verifyToken = (req, res, next) => {
-//     const authHeader = req?.headers?.authorization;
-//     if (!authHeader) {
-//         return res.status(401).json({ message: "Unauthorized" });
-//     }
-//     const token = authHeader.split(" ")[1];
-//     if (!token) {
-//         return res.status(401).json({ message: "Unauthorized" });
-//     }
+    const token = authHeader.split(" ")[1];
 
-
-//     next();
-// }
+    try {
+        const { payload } = await jwtVerify(token, JWKS);
+        req.user = payload; 
+        console.log(payload);
+        next();
+    } catch (error) {
+        console.error("JWT Verification Error:", error.message);
+        return res.status(403).json({ message: "Forbidden: Invalid Token" });
+    }
+};
 
 async function run() {
     try {
@@ -43,6 +51,8 @@ async function run() {
         const tutorCollection = db.collection("tutor");
         const bookingCollection = db.collection("booking");
 
+        // 1. Tutor Table
+        //a)get
         app.get("/tutor", async (req, res) => {
             const result = await tutorCollection.find().toArray();
             res.json(result);
@@ -58,16 +68,19 @@ async function run() {
         })
 
         app.get('/tutor/:id',
-            //     verifyToken, (req, res, next) => {
+            //      verifyToken, (req, res, next) => {
             //     const header = req.headers.authorization;
             //     console.log(header);
             //     next();
             // },
+            verifyToken,
             async (req, res) => {
                 const { id } = req.params;
                 const result = await tutorCollection.findOne({ _id: new ObjectId(id) });
                 res.json(result);
             })
+
+
 
         app.patch('/tutor/:id', async (req, res) => {
             const { id } = req.params;
@@ -124,6 +137,32 @@ async function run() {
         });
 
 
+        app.patch("/booking/cancel/:bookingId", async (req, res) => {
+            const { bookingId } = req.params;
+
+            // 1. Find the booking record
+            const booking = await bookingCollection.findOne({ _id: new ObjectId(bookingId) });
+
+            if (!booking) {
+                return res.status(404).json({ message: "Booking record not found" });
+            }
+
+            // 2. Update booking status to 'cancelled'
+            const result = await bookingCollection.updateOne(
+                { _id: new ObjectId(bookingId) },
+                { $set: { bookingStatus: "cancelled" } }
+            );
+
+            // 3. Update the tutor's profile to add 1 slot back
+            if (booking.tutorId) {
+                await tutorCollection.updateOne(
+                    { _id: new ObjectId(booking.tutorId) },
+                    { $inc: { totalSlots: 1 } }
+                );
+            }
+
+            res.json(result);
+        });
         app.get("/my-tutors/:userId", async (req, res) => {
             try {
                 const { userId } = req.params;
@@ -145,13 +184,14 @@ async function run() {
         app.get("/featured-tutors", async (req, res) => {
             try {
                 const result = await tutorCollection
-                    .find()
-                    .limit(6) 
+                    .aggregate([
+                        { $sample: { size: 6 } }
+                    ])
                     .toArray();
 
                 res.json(result);
             } catch (error) {
-                console.error("Error fetching homepage tutors:", error);
+                console.error("Error fetching featured tutors:", error);
                 res.status(500).json({ message: "Failed to load featured tutors" });
             }
         });
