@@ -227,7 +227,7 @@ async function run() {
             }
         });
 
-        app.get("/featured-tutors",verifyToken ,async (req, res) => {
+        app.get("/featured-tutors",async (req, res) => {
             try {
                 const result = await tutorCollection.aggregate([
                     { $sample: { size: 6 } }, 
